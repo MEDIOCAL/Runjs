@@ -1,0 +1,3 @@
+npm install --save babel-polyfill
+cnpm install jsonp 
+cnpm install jquery
