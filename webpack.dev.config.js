@@ -23,7 +23,7 @@ module.exports = {
               test:/\.(js|jsx)?$/,
               loader:'babel-loader',
               exclude:/node_modules/,
-              options:{presets:['env','stage-0','stage-1','stage-2']}
+              options:{presets:['env']}
             }
         ]
     },
