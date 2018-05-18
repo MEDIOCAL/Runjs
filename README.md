@@ -1,4 +1,3 @@
 # Runjs
 
-一个仿react
-的框架
+一个仿react的框架
