@@ -1,3 +1,3 @@
 # Runjs
 
-一个基于
+一个仿react
