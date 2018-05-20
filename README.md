@@ -1,3 +1,3 @@
 # Runjs
 
-一个仿react的框架
+A framework similar to react
