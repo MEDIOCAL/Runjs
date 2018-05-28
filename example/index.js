@@ -150,7 +150,7 @@ function flushBatchedUpdates() {
 	while(dirtyComponents.length > 0) {
 		const component = dirtyComponents.splice(0, 1)
 		console.log(component)
-		// component.updateComponent()
+		component.updateComponent()
 	}
 }
 
@@ -263,6 +263,15 @@ RunDomComponent.prototype = {
 				}
 			}
 		}
+	},
+	receiveComponent: function(nextElement) {
+		const prevElement = this._currentElement
+		this._currentElement = nextElement
+		this.updateComponent(prevElement, nextElement)
+	},
+	updateComponent: function(prevElement, nextElement) {
+		const prevProps = prevElement.props 
+		const nextProps = nextElement.props 
 	}
 }
 
@@ -272,6 +281,7 @@ function RunComComponent(node) {
 	this._hostParent = null
 	this.element = null
 	this.inst = null
+	this._renderedComponent = null
 }
 
 RunComComponent.prototype = {
@@ -316,6 +326,8 @@ RunComComponent.prototype = {
 
 		let instComponent = instanceComponent(this.element)
 
+		this._renderedComponent = instComponent
+
 		let mountImage = instComponent.mountComponent(hostParent)
 
 		if(inst && inst.componentDidMount) {
@@ -350,6 +362,75 @@ RunComComponent.prototype = {
 	    } 
 
 	    return nextState
+	},
+	performUpdate: function() {
+		if(this._paddingElement !== null) {
+			this.receiveComponent(this._pendingElement)
+		} else {
+			// setState更新
+			this.updateComponent(this._currentElement, this._currentElement)
+		}
+	},
+	receiveComponent: function() {
+
+	},
+	updateComponent: function(prevParentElement, nextParentElement) {
+		const inst = this.inst
+		const prevProps = prevParentElement.props
+   		const nextProps = nextParentElement.props
+		
+		let willReceive = false
+    
+	    if (prevParentElement !== nextParentElement) {
+	        willReceive = true
+	    }
+
+	    if (willReceive && inst.componentWillReceiveProps) {
+	        inst.componentWillReceiveProps(nextProps);
+	    }
+
+	    const nextState = this._processPendingState()
+
+	    let shouldUpdate = true
+
+	    if (inst.shouldComponentUpdate) {
+	    	shouldUpdate = inst.shouldComponentUpdate(nextProps, nextState)
+	    }
+
+	    if (shouldUpdate) {
+	    	this._performComponentUpdate(nextParentElement, nextProps, nextState)
+	    } else {
+	    	this._currentElement = nextParentElement
+	    	inst.props = nextProps
+	        inst.state = nextState
+	    }
+	},
+	_performComponentUpdate: function(nextElement, nextProps, nextState) {
+		const inst = this.inst
+		const prevState = inst.state 
+		const prevProps = inst.props 
+
+		if (inst.componentWillUpdate) {
+			inst.componentWillUpdate(nextProps, nextState)
+		}
+
+		this._currentElement = nextElement
+
+		inst.props = nextProps
+    	inst.state = nextState
+    	this._updateRenderComponent()
+	    if(inst.componentDidUpdate) {
+	    	inst.componentDidUpdate()
+	    }
+	},
+	_updateRenderComponent: function() {
+		const inst = this.inst
+		const prevComponentInstance = this._renderedComponent
+		const prevRenderedElement = prevComponentInstance._currentElement
+		const nextRenderedElement = inst.render()
+
+		prevComponentInstance.receiveComponent(nextRenderedElement)
+		
 	}
 }
 
@@ -382,8 +463,6 @@ RunComponent.prototype.setState = function(state, cb) {
 	queue.push(state)
 	RunUpdate.enqueueUpdate(internalInstance, cb)
 }
-
-
 
 function click() {
 	console.log(1)
