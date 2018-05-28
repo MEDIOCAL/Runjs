@@ -1,4 +1,5 @@
 let keyId = 0
+let componentId = 1
 let globalIdCounter = 1;
 const RunElement = {
 	createElement(tag, props, children) {
@@ -14,7 +15,6 @@ const Run = {
 	render(vNoideTree, ele) {
 		const instance = instanceComponent(vNoideTree)
 		const vnodeTree = instance.mountComponent(ele)
-		console.log(vnodeTree)
 		ele.appendChild(vnodeTree.node)
 	}
 }
@@ -28,7 +28,7 @@ const eventType = [
 	'onInput'
 ]
 
-var internalInstanceKey = '__reactInternalInstance$' + Math.random().toString(36).slice(2)
+var internalInstanceKey = '__runInternalInstance$' + Math.random().toString(36).slice(2)
 
 function DOMTree(node) {
 	return {
@@ -36,6 +36,7 @@ function DOMTree(node) {
 		instance: null
 	}
 }
+
 DOMTree.queueChild = function(parentTree, childTree) {
 	let child = childTree.node === undefined ? childTree : childTree.node
 	parentTree.node.appendChild(child)
@@ -67,7 +68,6 @@ RunEvent.putListener = function(type, component, cb) {
 	}
 	component._hostNode[internalInstanceKey] = component
 }
-
 
 RunEvent.dispatchEvent = function(type) {
 	let events = RunEvent.getEventType(type)
@@ -133,6 +133,54 @@ RunEvent.removeEvent = function(component) {
 			}
 		}
 	}
+}
+
+const Runtransaction = {
+	initialize: function() {
+		RunBatchingStrategy.isBatchingUpdates = true
+	},
+	closer: function() {
+		RunBatchingStrategy.isBatchingUpdates = false
+	}
+}
+
+function flushBatchedUpdates() {
+	let dirtyComponents = RunBatchingStrategy.dirtyComponents
+	console.log(dirtyComponents)
+	while(dirtyComponents.length > 0) {
+		const component = dirtyComponents.splice(0, 1)
+		console.log(component)
+		// component.updateComponent()
+	}
+}
+
+const RunBatchingStrategy = {
+	dirtyComponents: [],
+	isBatchingUpdates: false,
+	batchedUpdates: function(callback, component) {
+		let alreadyBatchingUpdates = RunBatchingStrategy.isBatchingUpdates
+		RunBatchingStrategy.isBatchingUpdates = true
+
+		if (alreadyBatchingUpdates) {
+	       return callback(component)
+	    } else {
+	       RunBatchingStrategy.dirtyComponents.push(component)
+	       flushBatchedUpdates()
+	    }
+	},
+	flushBatchedUpdates: flushBatchedUpdates
+}
+
+function enqueueUpdate(internalInstance, cb) {
+	if( !RunBatchingStrategy.isBatchingUpdates ) {
+		RunBatchingStrategy.batchedUpdates(enqueueUpdate, internalInstance)
+		return 
+	}
+	RunBatchingStrategy.dirtyComponents.push(internalInstance)
+}
+
+const RunUpdate = {
+	enqueueUpdate: enqueueUpdate
 }
 
 function RunDomComponent(node) {
@@ -219,7 +267,90 @@ RunDomComponent.prototype = {
 }
 
 function RunComComponent(node) {
+	this._componentId = componentId++
+	this._currentElement = node
+	this._hostParent = null
+	this.element = null
+	this.inst = null
+}
 
+RunComComponent.prototype = {
+	constructor: RunComComponent,
+	mountComponent: function(hostParent) {
+		Runtransaction.initialize()
+		let Component = this._currentElement.tag
+		let props = this._currentElement.props
+		let inst = null
+		let initialState = null
+		this._hostParent = hostParent
+
+		if(Component.isComponent) {
+			this.inst = inst = new Component(props)
+			inst.refs = {}
+			initialState = inst.state
+			inst._runInternalInstance = this
+		} else {
+			this.element = Component(props)
+		}
+
+		if(initialState === undefined ) {
+			initialState = inst.state = null
+		}
+
+		this._stateQueue = null 
+
+		if(inst && inst.componentWillMount) {
+			inst.componentWillMount()
+		}
+
+		if(this._stateQueue) {
+			inst.state = this._processPendingState()
+		}
+		
+
+		if(!this.element) {
+			this.element = inst.render()
+		}
+
+		
+
+		let instComponent = instanceComponent(this.element)
+
+		let mountImage = instComponent.mountComponent(hostParent)
+
+		if(inst && inst.componentDidMount) {
+			inst.componentDidMount()
+		}
+		Runtransaction.closer()
+		return mountImage
+	},
+	_processPendingState: function() {
+		let inst = this.inst
+		let queue = this._stateQueue 
+		this._stateQueue = null
+
+		if(!queue) {
+			return inst.state
+		}
+
+		if(queues.length === 1) {
+	    	return queues[0]
+	    }
+
+	    let nextState = {}
+
+	    for(let queue of queues) {
+	    	let state = {}
+	    	if(typeof queue === 'function') {
+	    		state = queue.call(inst, inst.state)
+	    	} else {
+	    		state = queue 
+	    	}
+	    	Object.assign({}, nextState, state)
+	    } 
+
+	    return nextState
+	}
 }
 
 function instanceComponent(node) {
@@ -240,6 +371,18 @@ function RunTextComponent (text) {
 	return document.createTextNode(text)
 }
 
+function RunComponent() {
+	this.state = null 
+	this.props = null
+}
+
+RunComponent.prototype.setState = function(state, cb) {
+	const internalInstance = this._runInternalInstance
+	const queue = internalInstance._stateQueue || (internalInstance._stateQueue = [])
+	queue.push(state)
+	RunUpdate.enqueueUpdate(internalInstance, cb)
+}
+
 
 
 function click() {
@@ -256,12 +399,50 @@ function change(e) {
 
 const rc = RunElement.createElement
 
+function Header(props) {
+	return rc('div', {class: 'header'}, 'header'+props.name)
+}
+
+function Content() {
+	RunComponent.call(this)
+	this.state = {
+		name: 'bbb'
+	}
+}
+Content.isComponent = true
+
+Content.prototype = RunComponent.prototype
+Content.prototype.constructor = Content
+Content.prototype.componentWillMount = function() {
+	console.log('componentWillMount')
+}
+Content.prototype.click = function() {
+	this.setState({
+		name: 'cxh'
+	})
+}
+Content.prototype.render = function() {
+	const me = this
+	return rc('div', {class: 'cont'}, [
+			rc('div', {class: 'show'}, me.state.name),
+			rc('a', {class: 'a', href: 'javascript:void(0)', onClick: me.click.bind(me)}, '点我切换')
+		]) 
+}
+
+Content.prototype.componentDidMount = function() {
+	console.log('componentDidMount')
+}
+
 let vnode = rc('div', {class: 'home', onClick: click}, 
 				rc('div', {class: 'son'}, [
 					rc('div', {class: 's1', onClick: click1}, '123'),
 					rc('div', {class: 's2'}, '456'),
+					rc(Header, {name: 'cxh'}, null),
+					rc('div', {class: 's2'}, '789'),
+					rc(Content, {name: 'cxh'}, null),
 					rc('input', {class: 's3', type: 'text', onChange: change}, null)
 				])
 			)
 
 Run.render(vnode, document.getElementById('app'))
+
