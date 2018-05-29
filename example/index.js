@@ -149,8 +149,7 @@ function flushBatchedUpdates() {
 	console.log(dirtyComponents)
 	while(dirtyComponents.length > 0) {
 		const component = dirtyComponents.splice(0, 1)
-		console.log(component)
-		component.updateComponent()
+		component[0].performUpdate()
 	}
 }
 
@@ -183,6 +182,14 @@ const RunUpdate = {
 	enqueueUpdate: enqueueUpdate
 }
 
+function enqueue(queue, update) {
+	if (update) {
+	    queue = queue || []
+	    queue.push(update)
+	  }
+	  return queue
+}
+
 function RunDomComponent(node) {
 		this._currentElement = node
 		this.tag = node.tag
@@ -209,24 +216,11 @@ RunDomComponent.prototype = {
 		return mountImage
 	},
 	initialChildren: function(children, domTree) {
+		let index = 0
+
 		let mountImages = []
 
-		if(children === null) {
-			return null 
-		}
-
-		let childInstances = {}
-
-		if(Array.isArray(children)) {
-			for(let child of children) {
-
-				let key = child.props.key === undefined ? ++keyId : child.props.key
-				childInstances[key] = instanceComponent(child)
-			}
-
-		} else {
-			childInstances[this.tag] = instanceComponent(children)
-		}
+		let childInstances = this.instantiateChild(children)
 		
 		this._renderedChildren = childInstances
 
@@ -237,6 +231,7 @@ RunDomComponent.prototype = {
 				if(child.mountComponent) {
 					mountImage = child.mountComponent(this._hostNode)
 				}
+				child._mountIndex = index++
 				mountImages.push(mountImage)
 			}
 		}
@@ -246,6 +241,32 @@ RunDomComponent.prototype = {
 		}
 
 		return mountImages
+	},
+	instantiateChild: function(children) {
+		if(children === null) {
+			return null 
+		}
+		let childInstances = {}
+		if(Array.isArray(children)) {
+			for(let i = 0, l = children.length; i< l; i++) {
+				let child = children[i]
+				let key = child.props.key === undefined ? i.toString(36) : child.props.key
+				childInstances[key] = instanceComponent(child)
+				console.log(childInstances[key])
+			}
+		} else {
+			childInstances[this.tag] = instanceComponent(children)
+		}
+		return childInstances
+	},
+	flattenChildren: function(children) {
+		if (children == null) {
+		    return children
+		}
+
+		let result = {}
+
+		
 	},
 	updateDOMProperties: function(lastProps, nextProps) {
 		if(nextProps) {
@@ -271,7 +292,49 @@ RunDomComponent.prototype = {
 	},
 	updateComponent: function(prevElement, nextElement) {
 		const prevProps = prevElement.props 
-		const nextProps = nextElement.props 
+		const nextProps = nextElement.props
+
+		const nextChildren = nextElement.props.children
+		const prevChildren = this._renderedChildren
+		
+		let childInstances = this.flattenChildren(nextChildren)
+
+		let updates = null
+		let lastIndex = 0
+		let nextIndex = 0
+		let lastPlacedNode = null
+
+		for(let name in childInstances) {
+			if (!childInstances.hasOwnProperty(name)) {
+	          continue
+	        }
+	        
+	        let prevChild = prevChildren && prevChildren[name]
+			let nextChild = childInstances[name]
+
+			if(prevChild === nextChild) {
+				console.log('sads')
+				enqueue(updates, this.moveChild(prevChild, lastPlacedNode, nextIndex, lastIndex))
+				lastIndex = Math.max(prevChild._mountIndex, lastIndex)
+				prevChild._mountIndex = nextIndex
+			} else {
+
+			}
+			
+		}
+	},
+	moveChild: function(child, afterNode, toIndex, lastIndex) {
+		console.log(child)
+		if (child._mountIndex < lastIndex) {
+	        return {
+			    type: 'MOVE_EXISTING',
+			    content: null,
+			    fromIndex: child._mountIndex,
+			    fromNode: child._hostNode,
+			    toIndex: toIndex,
+			    afterNode: afterNode
+			}
+	    }
 	}
 }
 
@@ -282,6 +345,7 @@ function RunComComponent(node) {
 	this.element = null
 	this.inst = null
 	this._renderedComponent = null
+	this._paddingElement = null
 }
 
 RunComComponent.prototype = {
@@ -338,10 +402,10 @@ RunComComponent.prototype = {
 	},
 	_processPendingState: function() {
 		let inst = this.inst
-		let queue = this._stateQueue 
+		let queues = this._stateQueue 
 		this._stateQueue = null
 
-		if(!queue) {
+		if(!queues) {
 			return inst.state
 		}
 
@@ -428,7 +492,6 @@ RunComComponent.prototype = {
 		const prevComponentInstance = this._renderedComponent
 		const prevRenderedElement = prevComponentInstance._currentElement
 		const nextRenderedElement = inst.render()
-
 		prevComponentInstance.receiveComponent(nextRenderedElement)
 		
 	}
