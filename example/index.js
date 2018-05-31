@@ -252,7 +252,6 @@ RunDomComponent.prototype = {
 				let child = children[i]
 				let key = child.props.key === undefined ? i.toString(36) : child.props.key
 				childInstances[key] = instanceComponent(child)
-				console.log(childInstances[key])
 			}
 		} else {
 			childInstances[this.tag] = instanceComponent(children)
@@ -263,10 +262,17 @@ RunDomComponent.prototype = {
 		if (children == null) {
 		    return children
 		}
-
 		let result = {}
-
-		
+		if(Array.isArray(children)) {
+			for(let i = 0, l = children.length; i< l; i++) {
+				let child = children[i]
+				let key = child.props.key === undefined ? i.toString(36) : child.props.key
+				result[key] = child
+			}
+		} else {
+			result[this.tag] = children
+		}
+		return result
 	},
 	updateDOMProperties: function(lastProps, nextProps) {
 		if(nextProps) {
@@ -294,26 +300,31 @@ RunDomComponent.prototype = {
 		const prevProps = prevElement.props 
 		const nextProps = nextElement.props
 
-		const nextChildren = nextElement.props.children
-		const prevChildren = this._renderedChildren
+		let nextChildren = nextElement.props.children
+		if(typeof nextChildren === 'string' || typeof nextChildren === 'number') {
+			nextChildren = null
+		}
+		let prevChildren = this._renderedChildren
 		
-		let childInstances = this.flattenChildren(nextChildren)
+		let removedNodes = {}
+        let mountImages = []
 
+		nextChildren = this.flattenChildren(nextChildren)
+		this.updateChildren(prevChildren, nextChildren, mountImages, removedNodes)
+		console.log(nextChildren)
 		let updates = null
 		let lastIndex = 0
 		let nextIndex = 0
 		let lastPlacedNode = null
-
-		for(let name in childInstances) {
-			if (!childInstances.hasOwnProperty(name)) {
+		for(let name in nextChildren) {
+			if (!nextChildren.hasOwnProperty(name)) {
 	          continue
 	        }
 	        
 	        let prevChild = prevChildren && prevChildren[name]
-			let nextChild = childInstances[name]
+			let nextChild = nextChildren[name]
 
 			if(prevChild === nextChild) {
-				console.log('sads')
 				enqueue(updates, this.moveChild(prevChild, lastPlacedNode, nextIndex, lastIndex))
 				lastIndex = Math.max(prevChild._mountIndex, lastIndex)
 				prevChild._mountIndex = nextIndex
@@ -323,8 +334,50 @@ RunDomComponent.prototype = {
 			
 		}
 	},
+	updateChildren: function(prevChildren, nextChildren, mountImages, removedNodes) {
+		if (!nextChildren && !prevChildren) {
+	      return
+	    }
+	    var name
+    	var prevChild
+
+    	//依次比较子 虚拟dom 的前后值，判断对子dom进行更新
+    	for(name in nextChildren) {
+    		if (!nextChildren.hasOwnProperty(name)) {
+		        continue
+		    }
+    		
+    		prevChild = prevChildren && prevChildren[name]
+
+    		let prevElement = prevChild && prevChild._currentElement
+    		let nextElement = nextChildren[name]
+
+    		if (prevChild != null && prevChild._currentElement) {
+		        prevChild.receiveComponent(nextElement)
+		        nextChildren[name] = prevChild
+		    } else if(prevChild._currentElement) {
+		    	if (prevChild) {
+		          removedNodes[name] = prevChild._hostNode
+		          prevChild.unmountComponent()
+		        }
+		        var nextChildInstance = instanceComponent(nextElement)
+		        nextChildren[name] = nextChildInstance
+		        nextChildInstance.mountComponent(this)
+		        mountImages.push(nextChildMountImage)
+		    }
+    	}
+
+    	for (name in prevChildren) {
+	      if (prevChildren.hasOwnProperty(name) && !(nextChildren && nextChildren.hasOwnProperty(name))) {
+	        prevChild = prevChildren[name]
+	        removedNodes[name] = prevChild._hostNode
+
+	        prevChild.unmountComponent(prevChild)
+	      }
+	    }
+
+	},
 	moveChild: function(child, afterNode, toIndex, lastIndex) {
-		console.log(child)
 		if (child._mountIndex < lastIndex) {
 	        return {
 			    type: 'MOVE_EXISTING',
@@ -335,6 +388,9 @@ RunDomComponent.prototype = {
 			    afterNode: afterNode
 			}
 	    }
+	},
+	unmountComponent: function() {
+
 	}
 }
 
@@ -501,7 +557,7 @@ function instanceComponent(node) {
 	const type = node.tag
 	
 	if(typeof node != 'object') {
-		return RunTextComponent(node)
+		return new RunTextComponent(node)
 	}
 
 	if(typeof type === 'string') {
@@ -512,7 +568,42 @@ function instanceComponent(node) {
 }
 
 function RunTextComponent (text) {
-	return document.createTextNode(text)
+	this._currentElement = text
+  	this._stringText = '' + text
+  	this._hostNode = null
+    this._hostParent = null
+    this._domID = 0
+    this._mountIndex = 0
+}
+
+RunTextComponent.prototype.mountComponent = function(hostParent) {
+	this._hostParent = hostParent
+	let lazyTree = DOMTree(document.createDocumentFragment())
+	let hostNode = this._hostNode = document.createTextNode(this._stringText)
+	DOMTree.queueChild(lazyTree, DOMTree(hostNode))
+	return lazyTree
+}
+
+RunTextComponent.prototype.receiveComponent = function(nextText) {
+	if (nextText !== this._currentElement) {
+      this._currentElement = nextText;
+      var nextStringText = '' + nextText;
+      if (nextStringText !== this._stringText) {
+        this._stringText = nextStringText;
+        var commentNodes = this._hostNode
+        if(commentNodes.nodeType === 3) {
+        	commentNodes.nodeValue = nextText
+        	return 
+        }
+        commentNodes.textContent = nextText
+      }
+    }
+}
+RunTextComponent.prototype.unmountComponent = function() {
+	if(this._hostNode && this._hostNode[internalInstanceKey]) {
+		 delete node[internalInstanceKey]
+	}
+	this._hostNode = null
 }
 
 function RunComponent() {
