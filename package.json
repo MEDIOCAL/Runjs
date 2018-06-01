@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "start": "webpack-dev-server --content-base  --inline --hot --config  webpack.dev.config.js --env development",
+    "start": "webpack-dev-server --content-base  build/ --inline --hot --config  webpack.dev.config.js --env development",
     "build": "webpack",
     "eslint": "eslint --ext .js example"
   },
