@@ -24,7 +24,7 @@ function Header(props) {
 function Content() {
 	RunComponent.call(this)
 	this.state = {
-		name: 'bbb'
+		status: true
 	}
 }
 Content.isComponent = true
@@ -35,14 +35,15 @@ Content.prototype.componentWillMount = function() {
 	console.log('componentWillMount')
 }
 Content.prototype.click = function() {
+	console.log('change')
 	this.setState({
-		name: 'cxh'
+		status: !this.state.status
 	})
 }
 Content.prototype.render = function() {
 	const me = this
 	return rc('div', {class: 'cont'}, [
-			rc('div', {class: 'show'}, me.state.name),
+			rc('div', {class: 'show'}, me.state.status ? 'bbb' : 'cxh'),
 			rc('a', {class: 'a', href: 'javascript:void(0)', onClick: me.click.bind(me)}, '点我切换')
 		]) 
 }
