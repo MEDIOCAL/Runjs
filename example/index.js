@@ -52,6 +52,83 @@ Content.prototype.componentDidMount = function() {
 	console.log('componentDidMount')
 }
 
+const lista = [
+	{
+		name: 'lisd'
+	},
+	{
+		name: 'aasc'
+	},
+	{
+		name: 'sds'
+	}
+]
+
+const listb = [
+	{
+		name: 'lisd'
+	},
+	{
+		name: 'aasc'
+	},
+	{
+		name: 'ssdeeds'
+	}
+]
+
+const listc = [
+	{
+		name: 'lisd'
+	},
+	{
+		name: 'aasc'
+	}
+]
+
+class List extends RunComponent {
+	constructor(props) {
+		super(props)
+		this.state = {
+			list: lista
+		}
+	} 
+
+	render() {
+		const me = this
+		return  rc('div', {class: 'cont'}, [
+					rc('ul', {class: 'list'}, this.renderList()),
+					rc('div', {class: 'a', onClick: me.lista.bind(me)}, 'A'),
+					rc('div', {class: 'a', onClick: me.listb.bind(me)}, 'B'),
+					rc('div', {class: 'a', onClick: me.listc.bind(me)}, 'C')
+				]) 
+	}
+
+	renderList() {
+		const { list } = this.state
+		return list.map( function(li, index) {
+			return rc('li', {class: 'li', key: index}, li.name)
+		})
+	}
+
+	lista() {
+		this.setState({
+			list: lista
+		})
+	}
+
+	listb() {
+		this.setState({
+			list: listb
+		})
+	}
+
+	listc() {
+		this.setState({
+			list: listc
+		})
+	}
+} 
+
 let vnode = rc('div', {class: 'home', onClick: click}, 
 				rc('div', {class: 'son'}, [
 					rc('div', {class: 's1', onClick: click1}, '123'),
@@ -59,7 +136,8 @@ let vnode = rc('div', {class: 'home', onClick: click},
 					rc(Header, {name: 'cxh'}, null),
 					rc('div', {class: 's2'}, '789'),
 					rc(Content, {name: 'cxh'}, null),
-					rc('input', {class: 's3', type: 'text', onChange: change}, null)
+					rc('input', {class: 's3', type: 'text', onChange: change}, null),
+					rc(List, {class: 'list-wrap'}, null)
 				])
 			)
 
