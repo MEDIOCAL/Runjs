@@ -132,7 +132,7 @@ class List extends RunComponent {
 let vnode = rc('div', {class: 'home', onClick: click}, 
 				rc('div', {class: 'son'}, [
 					rc('div', {class: 's1', onClick: click1}, '123'),
-					rc('div', {class: 's2'}, '456'),
+					rc('div', {class: 's2', ref: 's2'}, '456'),
 					rc(Header, {name: 'cxh'}, null),
 					rc('div', {class: 's2'}, '789'),
 					rc(Content, {name: 'cxh'}, null),
